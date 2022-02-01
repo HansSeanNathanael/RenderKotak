@@ -12,19 +12,6 @@
 
 double rad = 3.141593 / 180.0;
 
-#ifndef XY_PLANE
-#define XY_PLANE 0
-#endif // XY_PLANE
-
-#ifndef XZ_PLANE
-#define XZ_PLANE 1
-#endif // XY_PLANE
-
-#ifndef YZ_PLANE
-#define YZ_PLANE 2
-#endif // XY_PLANE
-
-
 class Camera
 {
 
@@ -115,32 +102,34 @@ public:
 //        printf("%lf %lf\n", this->x, this->y);
     }
 
-    void rotatePoint(double xCenter, double yCenter, double zCenter, int direction, double degree)
+    void rotatePoint(double xCenter, double yCenter, double zCenter, int xyDegree = 0, int xzDegree = 0, int yzDegree = 0)
     {
 //        printf("%lf %lf %lf\n", this->x, this->y, this->z);
         this->x = this->x - xCenter;
         this->y = this->y - yCenter;
         this->z = this->z - zCenter;
 
-        int x = this->x;
-        int y = this->y;
-        int z = this->z;
+        int x, y, z;
+        x = this->x;
+        y = this->y;
+        z = this->z;
 
-        if (direction == XY_PLANE)
-        {
-            this->x = cos(rad * degree) * x - sin(rad * degree) * y;
-            this->y = sin(rad * degree) * x + cos(rad * degree) * y;
-        }
-        else if (direction == XZ_PLANE)
-        {
-            this->x = cos(rad * degree) * x + sin(rad * degree) * z;
-            this->z = -1 * sin(rad * degree) * x + cos(rad * degree) * z;
-        }
-        else if (direction == YZ_PLANE)
-        {
-            this->y = cos(rad * degree) * y - sin(rad * degree) * z;
-            this->z = sin(rad * degree) * y + cos(rad * degree) * z;
-        }
+        this->x = cos(rad * xyDegree) * x - sin(rad * xyDegree) * y;
+        this->y = sin(rad * xyDegree) * x + cos(rad * xyDegree) * y;
+
+        x = this->x;
+        y = this->y;
+        z = this->z;
+
+        this->x = cos(rad * xzDegree) * x + sin(rad * xzDegree) * z;
+        this->z = -1 * sin(rad * xzDegree) * x + cos(rad * xzDegree) * z;
+
+        x = this->x;
+        y = this->y;
+        z = this->z;
+
+        this->y = cos(rad * yzDegree) * y - sin(rad * yzDegree) * z;
+        this->z = sin(rad * yzDegree) * y + cos(rad * yzDegree) * z;
 
         this->x = this->x + xCenter;
         this->y = this->y + yCenter;
@@ -177,6 +166,7 @@ class Pane
 private:
     Point *point[4];
 
+    Point *rotatedPoint[4];
     Point *projection[4];
 
 public:
@@ -186,6 +176,12 @@ public:
         this->point[1] = new Point(x2, y2, z2);
         this->point[2] = new Point(x3, y3, z3);
         this->point[3] = new Point(x4, y4, z4);
+
+
+        this->rotatedPoint[0] = new Point(x1, y1, z1);
+        this->rotatedPoint[1] = new Point(x2, y2, z2);
+        this->rotatedPoint[2] = new Point(x3, y3, z3);
+        this->rotatedPoint[3] = new Point(x4, y4, z4);
 
         this->projection[0] = new Point(x1, y1, z1);
         this->projection[1] = new Point(x2, y2, z2);
@@ -204,17 +200,18 @@ public:
 
     Point* getProjection(int point, double **matrixProjection)
     {
-        this->projection[point]->transform(this->point[point], matrixProjection);
+        this->projection[point]->transform(this->rotatedPoint[point], matrixProjection);
 
         return this->projection[point];
     }
 
-    void rotatePane(double xCenter, double yCenter, double zCenter, int direction, double degree)
+    void rotatePane(double xCenter, double yCenter, double zCenter, double xyDegree, double xzDegree, double yzDegree)
     {
         for (int i = 0; i < 4; i++)
         {
 //            printf("%lf %lf %lf\n", this->point[i]->getX(), this->point[i]->getY(), this->point[i]->getZ());
-            this->point[i]->rotatePoint(xCenter, yCenter, zCenter, direction, degree);
+            this->rotatedPoint[i]->setPoint(this->point[i]);
+            this->rotatedPoint[i]->rotatePoint(xCenter, yCenter, zCenter, xyDegree, xzDegree, yzDegree);
 //            printf("%lf %lf %lf\n", this->point[i]->getX(), this->point[i]->getY(), this->point[i]->getZ());
         }
 //        printf("\n");
@@ -227,7 +224,7 @@ public:
 
         for (int i = 0; i < 4; i++)
         {
-            this->projection[i]->transform(this->point[i], matrixProjection);
+            this->projection[i]->transform(this->rotatedPoint[i], matrixProjection);
 //            printf("%lf %lf\n", this->projection[i]->getX(), this->projection[i]->getY());
 
             groupByLowestFirstThenHighest[i] = i;
@@ -373,16 +370,19 @@ struct RotateBlock
 {
     void run(HWND hwnd, const RECT* rect)
     {
+        int degree1 = 10;
+        int degree2 = 5;
         while(true)
         {
             for (int i = 0; i < 6; i++)
             {
-                pane[i]->rotatePane(0, 0, 368, XZ_PLANE, 12);
-                pane[i]->rotatePane(0, 0, 368, YZ_PLANE, 31);
+                pane[i]->rotatePane(0, 0, 368, 0, degree1, degree2);
             }
             InvalidateRect(hwnd, rect, true);
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
+            degree1 += 12 % 360;
+            degree2 += 8 % 360;
 //            printf("TES\n");
         }
     }
@@ -509,45 +509,50 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 //                    printf("offsetY compare: %lf %lf\n", rectPoint[1].getY(), rectPoint[1].getY());
 //                    printf("%d %d\n", offsetX, offsetY);
 
-                    for (int r = 0; r < 4; r++)
-                    {
-//                        printf("CORNER: \n");
-//                        printf("%d %d\n", (int)(rectPoint[r].getY()) - offsetY, (int)(rectPoint[r].getX() - offsetX));
-//                        printf("%d %d\n", (int)(rectPoint[r].getX()), (int)(rectPoint[r].getY()));
-                        panePixel[(int)(rectPoint[r].getY()) - offsetY][(int)(rectPoint[r].getX() - offsetX)].setPixel(RGB(0, 0, 0), rectPoint[r].getZ());
-                    }
-//                    printf("\n");
+//                    for (int r = 0; r < 4; r++)
+//                    {
+////                        printf("CORNER: \n");
+////                        printf("%d %d\n", (int)(rectPoint[r].getY()) - offsetY, (int)(rectPoint[r].getX() - offsetX));
+////                        printf("%d %d\n", (int)(rectPoint[r].getX()), (int)(rectPoint[r].getY()));
+////                        panePixel[(int)(rectPoint[r].getY()) - offsetY][(int)(rectPoint[r].getX() - offsetX)].setPixel(RGB(0, 0, 0), rectPoint[r].getZ());
+//                    }
+////                    printf("\n");
 
 
                     for (int h = 0; h < 4; h++)
                     {
                         int next = h+1 < 4 ? h+1 : 0;
 
-                        double dx = rectPoint[next].getX() - rectPoint[h].getX();
-                        double dy = rectPoint[next].getY() - rectPoint[h].getY();
-                        double dz = rectPoint[next].getZ() - rectPoint[h].getZ();
+                        int startX = rectPoint[h].getX() - offsetX;
+                        int startY = rectPoint[h].getY() - offsetY;
+                        int finishX = rectPoint[next].getX() - offsetX;
+                        int finishY = rectPoint[next].getY() - offsetY;
 
-                        double itx = rectPoint[h].getX() - offsetX;
-                        double ity = rectPoint[h].getY() - offsetY;
-                        double itz = rectPoint[h].getZ();
+                        double startZ = rectPoint[h].getZ();
+                        double finishZ = rectPoint[next].getZ();
 
-                        double length = sqrt(dx*dx + dy*dy);
+                        int dx = finishX - startX;
+                        int dy = finishY - startY;
+                        double dz = finishZ - startZ;
 
-                        double ddx = dx/length;
-                        double ddy = dy/length;
+                        int length = sqrt(dx*dx + dy*dy);
+
                         double ddz = dz/length;
 
-                        int prevY = ity;
+                        int prevY = startY;
                         int finalY = rectPoint[next].getY() - offsetY;
 
 //                        printf("%lf %lf\n", dx, dy);
-                        for (int q = 0; q < length; q++)
+                        int q = 0;
+                        while(prevY != finalY)
                         {
-                            if (prevY != (int)(ity + ddy * q) && prevY != finalY)
+                            if (prevY != (int)(startY + (dy * q /length)))
                             {
-                                prevY = (int)(ity + ddy * q);
-                                panePixel[(int)(ity + ddy * q)][(int)(itx + ddx * q)].setPixel(RGB(0, 0, 0), itz + ddz * q);
+                                prevY = (int)(startY + (dy * q /length));
+                                panePixel[(int)(startY + (dy * q /length))][(int)(startX + (dx * q /length))].setPixel(RGB(0, 0, 0), startZ + ddz * q);
                             }
+
+                            q++;
                         }
                     }
 
@@ -585,26 +590,55 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
                     for (int h = 0; h < 4; h++)
                     {
+//                        int next = h+1 < 4 ? h+1 : 0;
+//
+//                        double dx = rectPoint[next].getX() - rectPoint[h].getX();
+//                        double dy = rectPoint[next].getY() - rectPoint[h].getY();
+//                        double dz = rectPoint[next].getZ() - rectPoint[h].getZ();
+//
+//                        double itx = rectPoint[h].getX() - ((double)offsetX);
+//                        double ity = rectPoint[h].getY() - ((double)offsetY);
+//                        double itz = rectPoint[h].getZ();
+//
+//                        double length = sqrt(dx*dx + dy*dy);
+//
+//                        double ddx = dx/length;
+//                        double ddy = dy/length;
+//                        double ddz = dz/length;
+//
+////                        printf("%lf %lf\n", dx, dy);
+//                        for (int q = 0; q < length; q++)
+//                        {
+//                            panePixel[(int)(ity + ddy * q)][(int)(itx + ddx * q)].setPixel(RGB(0, 0, 0), itz + ddz * q);
+//                        }
+
+
+
                         int next = h+1 < 4 ? h+1 : 0;
 
-                        double dx = rectPoint[next].getX() - rectPoint[h].getX();
-                        double dy = rectPoint[next].getY() - rectPoint[h].getY();
-                        double dz = rectPoint[next].getZ() - rectPoint[h].getZ();
+                        int startX = rectPoint[h].getX() - offsetX;
+                        int startY = rectPoint[h].getY() - offsetY;
+                        int finishX = rectPoint[next].getX() - offsetX;
+                        int finishY = rectPoint[next].getY() - offsetY;
 
-                        double itx = rectPoint[h].getX() - ((double)offsetX);
-                        double ity = rectPoint[h].getY() - ((double)offsetY);
-                        double itz = rectPoint[h].getZ();
+                        double startZ = rectPoint[h].getZ();
+                        double finishZ = rectPoint[next].getZ();
 
-                        double length = sqrt(dx*dx + dy*dy);
+                        int dx = finishX - startX;
+                        int dy = finishY - startY;
+                        double dz = finishZ - startZ;
 
-                        double ddx = dx/length;
-                        double ddy = dy/length;
+                        int length = sqrt(dx*dx + dy*dy);
+
                         double ddz = dz/length;
+
+                        int prevY = startY;
+                        int finalY = rectPoint[next].getY() - offsetY;
 
 //                        printf("%lf %lf\n", dx, dy);
                         for (int q = 0; q < length; q++)
                         {
-                            panePixel[(int)(ity + ddy * q)][(int)(itx + ddx * q)].setPixel(RGB(0, 0, 0), itz + ddz * q);
+                            panePixel[(int)(startY + (dy * q /length))][(int)(startX + (dx * q /length))].setPixel(RGB(0, 0, 0), startZ + ddz * q);
                         }
                     }
 
